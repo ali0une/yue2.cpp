@@ -19,22 +19,68 @@ tags:
   - steppers
   - comfyui
   - fs_audio
+  - ai-toolkit
 ---
 
 # MLTNT — Militant Roots Reggae LoRAs for YuE2
 
-Four artist-style LoRAs that push [YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B) into **modern militant roots reggae**: dark raspy male patois vocals, steppers and one-drop grooves, deep sub bass, bubbling Hammond, nyabinghi drums, horn stabs, dub sirens and spring reverb. Conscious, apocalyptic, anthemic.
+Six artist-style LoRAs that push [YuE2-3B](https://huggingface.co/m-a-p/YuE2-3B) into **modern militant roots reggae**: dark raspy male patois vocals, steppers grooves, deep sub bass, bubbling Hammond, nyabinghi drums, horn stabs, dub sirens and spring reverb. Conscious, apocalyptic, anthemic.
 
-Each file patches **both halves** of YuE2 in one go: the autoregressive planner (writes the score, decides the arrangement and the vocal lines) and the flow-matching decoder (the sound). Trigger word for all three: **`mltnt`**.
+Each file patches **both halves** of YuE2 in one go: the autoregressive planner (writes the score, decides the arrangement and the vocal lines) and the flow-matching decoder (the sound). Trigger word for all of them: **`mltnt`**.
+
+**September 2026 update: a new-trainer generation.** `mltnt_soundclash` and `mltnt_chanter` were trained on the Frontline data with a different trainer (the experimental YuE2 support in [Ostris AI Toolkit](https://github.com/ostris/ai-toolkit)). The voice is markedly more expressive and more idiomatic than on the four earlier files, and the range is wider: hip-hop, dancehall, lovers rock, fast steppers and slow roots from the same weights. They need one extra habit, planner strength 0.5 for anything fast or unusual, explained below. The four earlier files stay available and unchanged.
+
+*Last updated: 20 September 2026.*
+
+**Try it in the browser:** [MLTNT demo Space](https://huggingface.co/spaces/becausereasons/mltnt-reggae-yue2-demo), all six LoRAs on free ZeroGPU, with one-click recipes for the demos below. Built by the Hugging Face open-source team and kindly transferred to this account.
 
 | | LoRA | File | Character | Start here |
 |---|---|---|---|---|
+| 💥 | **MLTNT Soundclash** | `mltnt_soundclash.safetensors` | New-trainer generation, step 500. The versatile one: hip-hop with sub drops, hard dancehall, tender lovers rock. The most expressive voice of the set. | **clip 0.5** / model 1.0 for fast and hard styles, clip 1.0 for slow songs |
+| 🦁 | **MLTNT Chanter** | `mltnt_chanter.safetensors` | New-trainer generation, step 600. A more settled signature voice. At clip 1.0 it writes like Frontline (fast 160 BPM grid) with far more vocal musicality; at clip 0.5 it turns the same prompt into a slow heavy roots tune. | clip 1.0 or **clip 0.5**, model 1.0 |
 | 🔥 | **MLTNT Frontline** | `mltnt_frontline.safetensors` | The newest. Most distinctive voice tonality of the four, and the one trained with extra short excerpts of fast-delivery verses, so it is the pick for rapid-fire lyrics (see *Rapid-fire verses* below). Works on both recipes. | clip 1.0 / model 1.0, cfg 1.0 |
 | 🎤 | **MLTNT Fusion** | `mltnt_fusion.safetensors` | Widest palette. Reggae hip-hop fusion: boom-bap over one-drop, deejay toasting, sampled roots hooks. Happily moves off the 76 BPM roots grid. | clip 1.0 / model 1.5, cfg 1.4 |
 | 🥁 | **MLTNT Steppers** | `mltnt_steppers.safetensors` | The flagship. Tight, hard-hitting steppers with a big anthemic chorus. Most reliable vocal density. | clip 1.0 / model 1.0, cfg 1.0 |
 | 🌿 | **MLTNT Roots** | `mltnt_roots.safetensors` | The purist. Straightest roots timbre, least steered toward any one arrangement. | clip 1.0 / model 1.0, cfg 1.0 |
 
-## Listen
+## Listen: new-trainer generation
+
+Seed 7, 32 steps `dpm_2` / `sgm_uniform`, 360 s cap, no post-processing. Every song below ended on its own. `clip` is `strength_clip` (the planner), `model` is `strength_model` (the decoder).
+
+**Soundclash, hip-hop bass drops** — `prompts/hiphop_bass_drops.txt`, dense lyric, clip 0.5 / model 1.0 (96 BPM, D♯ minor, 3:02):
+
+<audio controls src="https://huggingface.co/becausereasons/yue2-mltnt-militant-reggae/resolve/main/demos/mltnt_soundclash__hiphop_bass_drops.mp3"></audio>
+
+**Soundclash, lovers rock** — `prompts/lovers_rock.txt`, standard lyric, full strength (73 BPM, D major, 4:26):
+
+<audio controls src="https://huggingface.co/becausereasons/yue2-mltnt-militant-reggae/resolve/main/demos/mltnt_soundclash__lovers_rock.mp3"></audio>
+
+**Soundclash, dancehall rapid-fire** — `prompts/dancehall_rapidfire.txt`, standard lyric, clip 0.5 / model 1.0 (3:14):
+
+<audio controls src="https://huggingface.co/becausereasons/yue2-mltnt-militant-reggae/resolve/main/demos/mltnt_soundclash__dancehall_rapidfire.mp3"></audio>
+
+**Chanter, the Frontline recipe at full strength** — `prompts/steppers_baseline.txt`, dense lyric, baseline recipe: the same prompt, lyric and seed as the Frontline demo below, and the planner picks the same 160 BPM F minor grid, with a much more musical voice (3:12):
+
+<audio controls src="https://huggingface.co/becausereasons/yue2-mltnt-militant-reggae/resolve/main/demos/mltnt_chanter__frontline_recipe.mp3"></audio>
+
+**Chanter, the same recipe at clip 0.5** — nothing else changed. With the planner at half strength the base model has more say, and the same words become a 76 BPM roots groove in A minor (3:10). This pair is the clearest picture of what the planner-strength knob does:
+
+<audio controls src="https://huggingface.co/becausereasons/yue2-mltnt-militant-reggae/resolve/main/demos/mltnt_chanter__frontline_recipe_clip05.mp3"></audio>
+
+### Using the new-trainer files
+
+They load exactly like the others (same fused-key layout, `text_encoders.*` planner and `diffusion_model.*` decoder; the LoRA matrices are stored as `lora_A` / `lora_B`), through the same FS_Audio graph shown in *Quick start*.
+
+- **Fast, hard or unusual styles (hip-hop, dancehall, fusion, fire chant): clip 0.5 / model 1.0.** At full planner strength these files over-commit: everything gets faster and more frantic, and occasionally the planner writes a runaway score stuck in one section. Half strength keeps the voice and hands song structure back to the base model.
+- **Slow songs (lovers rock, roots): clip 1.0 / model 1.0** works and gives the most character.
+- **Use a 360 s cap.** These files plan longer songs than the earlier ones (typically 250 to 320 s for the full lyric); a 240 s cap cuts most of them before the last chorus. In score mode the song length is decided up front by the score, so the cap only truncates.
+- **Fast delivery is a lever, not a default.** The phrase `rapid-fire double-time deejay flow` led the captions of the fast training excerpts and steers these files strongly: put it first in the style and pair it with a dense lyric and the *whole song* goes double time. For a fast chant in one section only, describe it in the style as a bridge feature and write dense lines in that section alone.
+- **Checkpoints differ in variety.** Soundclash (step 500) varies more from seed to seed and prompt to prompt; Chanter (step 600) converges on one voice and style. Pick by whether you want range or a signature.
+- The Fusion recipe's `strength_model` 1.5 was tuned for the earlier files; start the new ones at model 1.0.
+
+What the new trainer does differently, what it costs, how to spot a runaway score from the `.abc` sidecar, and the Windows training notes are written up on the sister page: [CNZN, *Two trainers: what we learned*](https://huggingface.co/becausereasons/yue2-cnzn-canzone-italiana#two-trainers-what-we-learned). The reggae run confirmed all of it: same recipe (650 steps, rank 32, planner KL anchor, short whole excerpts in the set), usable window steps 400 to 600, step 300 too early to trust.
+
+## Listen: the four earlier files
 
 All demos use the same original lyric, seed 7, 32 steps `dpm_2` / `sgm_uniform`, no post-processing.
 
@@ -223,11 +269,15 @@ The planner learns from the captions as much as from the audio, so the caption f
 - Dense multi-syllable lines overrun their bars and come out garbled. Budget roughly words ÷ 2 seconds per line at ~120 wpm and shorten the line rather than fighting pronunciation.
 - With the 150 s cap the planner still writes full-length intros and interludes, so the song truncates before the second chorus. Use 360.
 - The planner occasionally writes a plan with almost no sung bars. Change the seed; do not raise planner strength.
+- **The one drop rhythm is not properly learned.** Asking for it, even spelled out (kick and rim together on the third beat, empty first beat, 70 to 80 BPM), still gives a steppers or rockers kick pattern, on every file here including the new-trainer generation. The training captions mention one drop only as a phrase in the middle of the instrument list, and drum patterns are not part of the score the planner writes (melody and chords only), so the rhythm has to be learned from caption to sound and that handle was too weak. It likely needs more specific data: songs labelled with a leading rhythm tag right after the trigger, checked by ear, plus riddim or dub versions and short drum-and-bass excerpts where the pattern is exposed. By contrast, a tag that did lead the caption in training (`rapid-fire double-time deejay flow`) steers the new-trainer files strongly.
+- The new-trainer files are less forgiving than the earlier four: step through clip 1.0 and 0.5 before judging a prompt, and expect the occasional runaway score at full strength on fast styles.
 - No instrumental-only mode is baked in; the LoRAs assume a lyric.
 
 ## Files
 
 ```
+mltnt_soundclash.safetensors    118 MB   new-trainer generation, step 500 (planner + decoder LoRA, bf16)
+mltnt_chanter.safetensors       118 MB   new-trainer generation, step 600
 mltnt_steppers.safetensors      177 MB   planner + decoder LoRA (bf16 weights, fp32 projection diffs)
 mltnt_fusion.safetensors       177 MB
 mltnt_roots.safetensors         177 MB
@@ -245,5 +295,6 @@ These LoRAs are trained on my own GPU and released free. If they're useful to yo
 Weights are released under **CC BY-NC 4.0**, inherited from the YuE2-3B base model. Non-commercial use only; attribute "MLTNT LoRAs by becausereasons".
 
 - [YuE2](https://huggingface.co/m-a-p/YuE2-3B) by the Multimodal Art Projection (m-a-p) team; ComfyUI repack by [Comfy-Org](https://huggingface.co/Comfy-Org/YuE2).
+- [AI Toolkit](https://github.com/ostris/ai-toolkit) by Ostris: the trainer behind Soundclash and Chanter; real-audio tokenizer by Kytra.
 - [ComfyUI-FS_Audio_Suite](https://github.com/KytraScript/ComfyUI-FS_Audio_Suite) by KytraScript / The Fixed Seed Company: inference nodes and the artist trainer.
 - Trained and documented by becausereasons, September 2026.
