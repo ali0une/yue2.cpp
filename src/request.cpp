@@ -16,10 +16,14 @@ static const yyjson_write_flag WRITE_FLAGS =
     YYJSON_WRITE_PRETTY | YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_FP_TO_FLOAT;
 
 void request_init(Yue2Request * r) {
-    r->style  = "";
-    r->lyrics = "";
-    r->abc    = "";
-    r->cot    = "full";
+    r->style   = "";
+    r->lyrics  = "";
+    r->abc     = "";
+    r->cot     = "full";
+    r->adapter = "";
+
+    r->adapter_clip_strength  = 1.0f;
+    r->adapter_model_strength = 1.0f;
 
     r->duration         = 360.0f;
     r->lm_seed          = -1;
@@ -127,6 +131,15 @@ static void request_parse_obj(yyjson_val * obj, Yue2Request * r) {
     if ((v = yyjson_obj_get(obj, "cot")) && yyjson_is_str(v)) {
         r->cot = yy_str(v);
     }
+    if ((v = yyjson_obj_get(obj, "adapter")) && yyjson_is_str(v)) {
+        r->adapter = yy_str(v);
+    }
+    if ((v = yyjson_obj_get(obj, "adapter_clip_strength")) && yyjson_is_num(v)) {
+        r->adapter_clip_strength = (float) yyjson_get_num(v);
+    }
+    if ((v = yyjson_obj_get(obj, "adapter_model_strength")) && yyjson_is_num(v)) {
+        r->adapter_model_strength = (float) yyjson_get_num(v);
+    }
     if ((v = yyjson_obj_get(obj, "duration")) && yyjson_is_num(v)) {
         r->duration = (float) yyjson_get_num(v);
     }
@@ -220,6 +233,15 @@ std::string request_to_json(const Yue2Request * r, bool sparse) {
     }
     if (!sparse || r->cot != d.cot) {
         yyjson_mut_obj_add_strncpy(doc, root, "cot", r->cot.c_str(), r->cot.size());
+    }
+    if (!sparse || !r->adapter.empty()) {
+        yyjson_mut_obj_add_strncpy(doc, root, "adapter", r->adapter.c_str(), r->adapter.size());
+    }
+    if (!sparse || r->adapter_clip_strength != d.adapter_clip_strength) {
+        yyjson_mut_obj_add_real(doc, root, "adapter_clip_strength", r->adapter_clip_strength);
+    }
+    if (!sparse || r->adapter_model_strength != d.adapter_model_strength) {
+        yyjson_mut_obj_add_real(doc, root, "adapter_model_strength", r->adapter_model_strength);
     }
     if (!sparse || r->duration != d.duration) {
         yyjson_mut_obj_add_real(doc, root, "duration", r->duration);

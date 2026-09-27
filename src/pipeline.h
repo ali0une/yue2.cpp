@@ -23,6 +23,12 @@
 #include "torch-cpu-rng.h"
 #include "vae.h"
 
+#ifdef _WIN32
+#    include <windows.h>
+#else
+#    include <dirent.h>
+#endif
+
 #include <cstdlib>
 #include <cstring>
 #include <optional>
@@ -53,6 +59,9 @@ struct Yue2Pipeline {
     std::string        model_path;        // the backbone GGUF, both halves and the tokenizer
     std::string        vae_path;
     std::string        transcriber_path;  // the SheetSage2 GGUF, empty without one
+    std::string        adapter_name;      // active LoRA, empty for none; part of the store key
+    float              adapter_clip_strength  = 1.0f;  // LoRA scale of the AR half, [0.5, 1.0]
+    float              adapter_model_strength = 1.0f;  // LoRA scale of the NAR half, [1.0, 1.5]
     Yue2PipelineParams params;
     DebugDumper        dumper;
 
@@ -139,6 +148,62 @@ static bool pipeline_configure(Yue2Pipeline *             p,
     return true;
 }
 
+// Load every *.safetensors in dir as a runtime LoRA into the store registry.
+// The files are parsed and validated here; the weights are merged later,
+// at backbone load time, under each adapter's name. Fails on the first bad
+// file so a broken download never reaches a generate.
+static bool pipeline_load_adapters(Yue2Pipeline * p, const char * dir) {
+    int n = 0;
+#ifdef _WIN32
+    WIN32_FIND_DATAA fd;
+    std::string      pattern = std::string(dir) + "\\*.safetensors";
+    HANDLE           h       = FindFirstFileA(pattern.c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) {
+        return true;  // empty or missing dir, no adapters
+    }
+    do {
+        std::string name = fd.cFileName;
+        if (name[0] == '.' || !name.compare(0, 1, "~")) {
+            continue;
+        }
+        std::string path = std::string(dir) + "\\" + name;
+        auto *      ad   = new Yue2Adapter();
+        if (!yue2_adapter_load(ad, path.c_str())) {
+            yue2_adapter_free(ad);
+            return false;
+        }
+        store_set_adapter(p->store, ad);
+        n++;
+    } while (FindNextFileA(h, &fd));
+    FindClose(h);
+#else
+    DIR * d = opendir(dir);
+    if (!d) {
+        return true;  // empty or missing dir, no adapters
+    }
+    struct dirent * e;
+    while ((e = readdir(d)) != nullptr) {
+        std::string name = e->d_name;
+        const size_t len = name.size();
+        if (len < 12 || name.compare(len - 12, 12, ".safetensors") != 0) {
+            continue;
+        }
+        std::string path = std::string(dir) + "/" + name;
+        auto *      ad   = new Yue2Adapter();
+        if (!yue2_adapter_load(ad, path.c_str())) {
+            yue2_adapter_free(ad);
+            closedir(d);
+            return false;
+        }
+        store_set_adapter(p->store, ad);
+        n++;
+    }
+    closedir(d);
+#endif
+    fprintf(stderr, "[Pipeline] %d adapter(s) loaded from %s\n", n, dir);
+    return true;
+}
+
 static void pipeline_free(Yue2Pipeline * p) {
     if (!p->configured) {
         return;
@@ -153,7 +218,7 @@ static void pipeline_free(Yue2Pipeline * p) {
 // (idempotent on cache hits). The NAR bakes them into its graph at build
 // time, the LM reads them at every forward.
 static Qwen3LM * require_lm(Yue2Pipeline * p) {
-    ModelKey  k = { MODEL_LM, p->model_path };
+    ModelKey  k = { MODEL_LM, p->model_path, p->adapter_name, p->adapter_clip_strength };
     Qwen3LM * m = store_require_lm(p->store, k);
     if (m) {
         m->use_flash_attn = m->use_flash_attn && !p->params.no_fa;
@@ -163,7 +228,7 @@ static Qwen3LM * require_lm(Yue2Pipeline * p) {
 }
 
 static Yue2NAR * require_nar(Yue2Pipeline * p) {
-    ModelKey  k = { MODEL_NAR, p->model_path };
+    ModelKey  k = { MODEL_NAR, p->model_path, p->adapter_name, p->adapter_model_strength };
     Yue2NAR * m = store_require_nar(p->store, k);
     if (m) {
         m->use_flash_attn = m->use_flash_attn && !p->params.no_fa;
@@ -173,12 +238,12 @@ static Yue2NAR * require_nar(Yue2Pipeline * p) {
 }
 
 static VAEGGML * require_vae(Yue2Pipeline * p) {
-    ModelKey k = { MODEL_VAE, p->vae_path };
+    ModelKey k = { MODEL_VAE, p->vae_path, "", 1.0f };
     return store_require_vae(p->store, k);
 }
 
 static SheetSage2 * require_ss2(Yue2Pipeline * p) {
-    ModelKey     k = { MODEL_SS2, p->transcriber_path };
+    ModelKey     k = { MODEL_SS2, p->transcriber_path, "", 1.0f };
     SheetSage2 * m = store_require_ss2(p->store, k);
     if (m) {
         m->use_flash_attn = m->use_flash_attn && !p->params.no_fa;
@@ -234,6 +299,12 @@ static bool pipeline_generate(Yue2Pipeline *          p,
     }
     if (r.steps < 1 || r.lm_batch_size < 1 || r.synth_batch_size < 1) {
         fprintf(stderr, "[Pipeline] FATAL: steps and batch sizes must be positive\n");
+        return false;
+    }
+    if (!yue2_adapter_strengths_valid(r.adapter_clip_strength, r.adapter_model_strength)) {
+        fprintf(stderr, "[Pipeline] FATAL: adapter strength out of range (clip [%.1f, %.1f], model [%.1f, %.1f])\n",
+                (double) YUE2_CLIP_STRENGTH_MIN, (double) YUE2_CLIP_STRENGTH_MAX, (double) YUE2_MODEL_STRENGTH_MIN,
+                (double) YUE2_MODEL_STRENGTH_MAX);
         return false;
     }
     if (!yue2_sampling_valid(r.abc_sampling, "abc") || !yue2_sampling_valid(r.semantic_sampling, "semantic")) {

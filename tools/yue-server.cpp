@@ -418,6 +418,7 @@ static bool         g_keep_loaded = false;
 static std::string  g_model_path;
 static std::string  g_vae_path;
 static std::string  g_transcriber_path;
+static std::string  g_adapters_dir;
 
 static void on_signal(int) {
     active_job_cancel();
@@ -450,6 +451,13 @@ static void handle_props(const httplib::Request &, httplib::Response & res) {
     yyjson_mut_obj_add_str(doc, root, "version", YUE2_VERSION);
     yyjson_mut_obj_add_strncpy(doc, root, "model", g_model_path.c_str(), g_model_path.size());
     yyjson_mut_obj_add_strncpy(doc, root, "vae", g_vae_path.c_str(), g_vae_path.size());
+
+    // The runtime LoRAs of the adapters dir, by name; empty without one
+    yyjson_mut_val * adapters = yyjson_mut_arr(doc);
+    for (const auto & name : store_adapter_names(g_pipeline.store)) {
+        yyjson_mut_arr_add_str(doc, adapters, name.c_str());
+    }
+    yyjson_mut_obj_add_val(doc, root, "adapters", adapters);
     yyjson_mut_obj_add_int(doc, root, "sample_rate", YUE2_SAMPLE_RATE);
     yyjson_mut_obj_add_int(doc, root, "frame_rate", YUE2_FRAME_RATE);
     yyjson_mut_obj_add_int(doc, root, "context", YUE2_CONTEXT);
@@ -512,6 +520,17 @@ static bool validate(const httplib::Request & req, httplib::Response & res, Yue2
         res.set_content(json_string("error", "sampling preset outside the protocol bounds"), "application/json");
         return false;
     }
+    if (!r->adapter.empty() && !store_find_adapter(g_pipeline.store, r->adapter.c_str())) {
+        res.status = 400;
+        res.set_content(json_string("error", "unknown adapter"), "application/json");
+        return false;
+    }
+    if (!yue2_adapter_strengths_valid(r->adapter_clip_strength, r->adapter_model_strength)) {
+        res.status = 400;
+        res.set_content(json_string("error", "adapter strength out of range (clip [0.5, 1.0], model [1.0, 1.5])"),
+                        "application/json");
+        return false;
+    }
     request_resolve_seed(r);
     return true;
 }
@@ -538,6 +557,12 @@ static void run_transcribe(std::shared_ptr<Job> job, std::vector<float> audio, b
 static void run_job(std::shared_ptr<Job> job, Yue2Request request) {
     active_job_set(job);
     fprintf(stderr, "[Server] Job %s: %s\n", job->id.c_str(), request_to_json(&request).c_str());
+
+    // The worker owns the pipeline: the adapter of this request, with its
+    // strength per half, is the active one for the duration of the generate
+    g_pipeline.adapter_name           = request.adapter;
+    g_pipeline.adapter_clip_strength  = request.adapter_clip_strength;
+    g_pipeline.adapter_model_strength = request.adapter_model_strength;
 
     std::vector<Yue2Song> songs;
     bool ok = pipeline_generate(&g_pipeline, request, &songs, server_cancel_job, (void *) &job->cancel);
@@ -594,6 +619,7 @@ static void print_usage(const char * prog) {
             "\n"
             "Optional:\n"
             "  --transcriber <gguf>   SheetSage2 GGUF, enables /transcribe\n"
+            "  --adapters <dir>       Dir of LoRA .safetensors, selectable per request\n"
             "  --host <addr>          Listen address (default: 0.0.0.0)\n"
             "  --port <N>             Listen port (default: 8087)\n"
             "  --max-batch <N>        Song batch limit, one KV set each (default: 1)\n"
@@ -626,6 +652,8 @@ int main(int argc, char ** argv) {
             g_vae_path = argv[++i];
         } else if (!strcmp(argv[i], "--transcriber") && !last) {
             g_transcriber_path = argv[++i];
+        } else if (!strcmp(argv[i], "--adapters") && !last) {
+            g_adapters_dir = argv[++i];
         } else if (!strcmp(argv[i], "--host") && !last) {
             host = argv[++i];
         } else if (!strcmp(argv[i], "--port") && !last) {
@@ -666,6 +694,10 @@ int main(int argc, char ** argv) {
     g_pipeline.store            = store_create(g_keep_loaded ? EVICT_NEVER : EVICT_STRICT);
     g_pipeline.transcriber_path = g_transcriber_path;
     if (!pipeline_configure(&g_pipeline, g_model_path.c_str(), g_vae_path.c_str(), params)) {
+        store_free(g_pipeline.store);
+        return 1;
+    }
+    if (!g_adapters_dir.empty() && !pipeline_load_adapters(&g_pipeline, g_adapters_dir.c_str())) {
         store_free(g_pipeline.store);
         return 1;
     }

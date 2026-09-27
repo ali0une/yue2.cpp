@@ -21,6 +21,7 @@
 // prefix rows repeated for each, the frame inputs shared.
 #pragma once
 
+#include "adapter-merge.h"
 #include "debug.h"
 #include "qwen3-lm.h"
 #include "timer.h"
@@ -121,7 +122,8 @@ static void nar_load_layer(WeightCtx *         wctx,
     ly->down_proj = gf_load_tensor(wctx, gf, prefix + ".nar_mlp.down_proj.weight");
 }
 
-static bool nar_load(Yue2NAR * n, const char * gguf_path) {
+static bool nar_load(Yue2NAR * n, const char * gguf_path, const Yue2Adapter * adapter = nullptr,
+                     float scale = 1.0f) {
     *n = {};
 
     GGUFModel gf = {};
@@ -160,6 +162,13 @@ static bool nar_load(Yue2NAR * n, const char * gguf_path) {
     n->time_b0    = gf_load_tensor_f32(&n->wctx, gf, "time_embedder.mlp.0.bias");
     n->time_w1    = gf_load_tensor(&n->wctx, gf, "time_embedder.mlp.2.weight");
     n->time_b1    = gf_load_tensor_f32(&n->wctx, gf, "time_embedder.mlp.2.bias");
+
+    // Runtime LoRA merge into the staged weights, before the upload,
+    // the io projections included
+    if (adapter && !yue2_adapter_merge(&n->wctx, gf, adapter, n->cfg.n_layers, false, scale)) {
+        gf_close(&gf);
+        return false;
+    }
 
     if (!wctx_alloc(&n->wctx, n->backend)) {
         fprintf(stderr, "[NAR] FATAL: failed to allocate weights\n");

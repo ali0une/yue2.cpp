@@ -14,6 +14,7 @@
 
 #include "timer.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -39,13 +40,16 @@ struct ModelKeyHash {
     size_t operator()(const ModelKey & k) const noexcept {
         size_t h = std::hash<int>{}(static_cast<int>(k.kind));
         h ^= std::hash<std::string>{}(k.path) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+        h ^= std::hash<std::string>{}(k.adapter) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+        h ^= std::hash<float>{}(k.adapter_strength) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
         return h;
     }
 };
 
 struct ModelKeyEq {
     bool operator()(const ModelKey & a, const ModelKey & b) const noexcept {
-        return a.kind == b.kind && a.path == b.path;
+        return a.kind == b.kind && a.path == b.path && a.adapter == b.adapter &&
+               a.adapter_strength == b.adapter_strength;
     }
 };
 
@@ -80,6 +84,9 @@ struct ModelStore {
 
     // CPU resident tokenizers, keyed by backbone GGUF path. Small, never evicted.
     std::unordered_map<std::string, CpuEntry> bpe_by_path;
+
+    // Runtime LoRAs, keyed by name. Parsed at startup, merged at load time.
+    std::unordered_map<std::string, Yue2Adapter *> adapters;
 };
 
 // Evicts every GPU entry that conflicts with the key we are about to
@@ -168,7 +175,40 @@ void store_free(ModelStore * s) {
     for (auto & kv : s->bpe_by_path) {
         kv.second.deleter(kv.second.ptr);
     }
+
+    // Adapters.
+    for (auto & kv : s->adapters) {
+        yue2_adapter_free(kv.second);
+    }
+
     delete s;
+}
+
+void store_set_adapter(ModelStore * s, Yue2Adapter * ad) {
+    if (!s || !ad) {
+        return;
+    }
+    s->adapters[ad->name] = ad;
+}
+
+Yue2Adapter * store_find_adapter(const ModelStore * s, const char * name) {
+    if (!s || !name || !*name) {
+        return nullptr;
+    }
+    auto it = s->adapters.find(name);
+    return it == s->adapters.end() ? nullptr : it->second;
+}
+
+std::vector<std::string> store_adapter_names(const ModelStore * s) {
+    std::vector<std::string> names;
+    if (!s) {
+        return names;
+    }
+    for (const auto & kv : s->adapters) {
+        names.push_back(kv.first);
+    }
+    std::sort(names.begin(), names.end());
+    return names;
 }
 
 // Each require_* follows the same shape: check cache, evict conflicts,
@@ -216,12 +256,17 @@ Qwen3LM * store_require_lm(ModelStore * s, const ModelKey & k) {
     if (auto * hit = cache_hit<Qwen3LM>(s, k)) {
         return hit;
     }
+    Yue2Adapter * ad = store_find_adapter(s, k.adapter.c_str());
+    if (!k.adapter.empty() && !ad) {
+        fprintf(stderr, "[Store] FATAL: unknown adapter %s\n", k.adapter.c_str());
+        return nullptr;
+    }
     if (s->policy == EVICT_STRICT) {
         evict_conflicts(s, k);
     }
     Timer     t;
     Qwen3LM * m = new Qwen3LM();
-    if (!qw3lm_load(m, k.path.c_str())) {
+    if (!qw3lm_load(m, k.path.c_str(), ad, k.adapter_strength)) {
         delete m;
         return nullptr;
     }
@@ -234,12 +279,17 @@ Yue2NAR * store_require_nar(ModelStore * s, const ModelKey & k) {
     if (auto * hit = cache_hit<Yue2NAR>(s, k)) {
         return hit;
     }
+    Yue2Adapter * ad = store_find_adapter(s, k.adapter.c_str());
+    if (!k.adapter.empty() && !ad) {
+        fprintf(stderr, "[Store] FATAL: unknown adapter %s\n", k.adapter.c_str());
+        return nullptr;
+    }
     if (s->policy == EVICT_STRICT) {
         evict_conflicts(s, k);
     }
     Timer     t;
     Yue2NAR * m = new Yue2NAR();
-    if (!nar_load(m, k.path.c_str())) {
+    if (!nar_load(m, k.path.c_str(), ad, k.adapter_strength)) {
         delete m;
         return nullptr;
     }

@@ -484,6 +484,9 @@ the server rejects a request with neither.
     "lyrics":          "",
     "abc":             "",
     "cot":             "full",
+    "adapter":         "",
+    "adapter_clip_strength": 1.0,
+    "adapter_model_strength": 1.0,
     "duration":        360.0,
     "lm_seed":         -1,
     "seed":            -1,
@@ -520,6 +523,23 @@ can be edited and submitted again.
 **`cot`** (string, default `"full"`)
 Chain of thought mode: `"full"` for a chord annotated score, `"melody"`
 for a melody only score, `"off"` to skip the symbolic stage.
+
+**`adapter`** (string, default `""`)
+Runtime LoRA to merge into the backbone, by adapter name. Empty runs the base
+weights. The name must exist in the server's `--adapters` dir; `GET /props`
+lists the loaded names. See [adapters/README.md](../adapters/README.md).
+
+**`adapter_clip_strength`** (float, default `1.0`, range `[0.5, 1.0]`)
+Strength the LoRA is merged at in the planner (AR) half: how much it steers
+the score the model writes. Below 1.0 the base model keeps more say over
+tempo and structure; above 1.0 is refused because the planner collapses the
+vocal.
+
+**`adapter_model_strength`** (float, default `1.0`, range `[1.0, 1.5]`)
+Strength the LoRA is merged at in the decoder (NAR) half, the voice timbre.
+Above 1.0 pushes the trained delta further, e.g. the MLTNT Fusion recipe
+runs it at 1.5. Both strengths are part of the model cache key: the same
+adapter under two strengths is two resident modules.
 
 **`duration`** (float seconds, default `360.0`)
 Target length. The preset of the semantic stage caps it, so the shorter of

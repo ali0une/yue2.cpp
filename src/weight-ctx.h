@@ -34,7 +34,8 @@ struct WeightCtx {
     // Staging buffers for type-converted data, kept alive until wctx_alloc.
     // unique_ptr keeps the data address stable even when the outer vector grows,
     // so src pointers stored in pending stay valid across staging.push_back().
-    std::vector<std::unique_ptr<float[]>> staging;
+    std::vector<std::unique_ptr<float[]>> staging;     // F32 conversion buffers
+    std::vector<std::unique_ptr<uint8_t[]>> staging_raw;  // re-encoded adapter merge buffers
 };
 
 static void wctx_init(WeightCtx * wctx, int n_tensors) {
@@ -68,6 +69,7 @@ static bool wctx_alloc(WeightCtx * wctx, ggml_backend_t backend) {
             (float) total / (1024 * 1024));
     wctx->pending.clear();
     wctx->staging.clear();
+    wctx->staging_raw.clear();
     return true;
 }
 

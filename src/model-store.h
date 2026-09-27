@@ -38,8 +38,10 @@
 // gets evicted, following the policy above set at creation time.
 //
 // Keys
-//   A module is uniquely identified by (kind, path). Two requires with the
-//   same key return the same instance.
+//   A module is uniquely identified by (kind, path, adapter, strength).
+//   Two requires with the same key return the same instance; the same half
+//   under two adapters or two strengths is a different module, so either
+//   switch reloads.
 //
 // Refcounting
 //   Each module has a refcount. require increments it, release decrements.
@@ -52,6 +54,7 @@
 //   serializes GPU work on one worker; HTTP handlers never touch the
 //   store. Adding a second worker requires adding a mutex here first.
 
+#include "adapter-merge.h"
 #include "bpe.h"
 #include "nar.h"
 #include "qwen3-lm.h"
@@ -60,6 +63,7 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 struct ModelStore;
 
@@ -72,7 +76,9 @@ enum ModelKind {
 
 struct ModelKey {
     ModelKind   kind;
-    std::string path;  // GGUF path the module is loaded from
+    std::string path;              // GGUF path the module is loaded from
+    std::string adapter;           // active LoRA name, empty for none; part of the key
+    float       adapter_strength;  // LoRA scale of this half, 1.0 = full strength
 };
 
 enum EvictPolicy {
@@ -105,6 +111,13 @@ void store_release(ModelStore * s, void * handle);
 // evicted: the tokenizer travels with the backbone GGUF metadata (a few
 // MB). Returns NULL on load failure.
 BPETokenizer * store_bpe(ModelStore * s, const char * lm_path);
+
+// Runtime LoRA registry. Adapters are parsed once at startup and merged
+// into the staged weights every time a half is (re)loaded under their
+// name. set takes ownership; free releases them all.
+void            store_set_adapter(ModelStore * s, Yue2Adapter * ad);
+Yue2Adapter *   store_find_adapter(const ModelStore * s, const char * name);
+std::vector<std::string> store_adapter_names(const ModelStore * s);
 
 // Observability: sum of currently resident GPU module weight buffers, and
 // the count of loaded GPU modules.

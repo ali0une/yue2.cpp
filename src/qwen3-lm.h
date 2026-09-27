@@ -5,6 +5,7 @@
 // The AR half of the MoT backbone: the nar_* weight set is read by nar.h
 #pragma once
 
+#include "adapter-merge.h"
 #include "graph-arena.h"
 #include "qwen3-enc.h"  // Qwen3Layer, Qwen3Config, layer build helpers
 #include "static-graph.h"
@@ -321,7 +322,8 @@ static bool qw3lm_read_config(const char * gguf_path, Qwen3LMConfig * cfg) {
 }
 
 // Load model weights from GGUF
-static bool qw3lm_load(Qwen3LM * m, const char * gguf_path) {
+static bool qw3lm_load(Qwen3LM * m, const char * gguf_path, const Yue2Adapter * adapter = nullptr,
+                       float scale = 1.0f) {
     *m = {};
 
     qw3lm_init_backend(m);
@@ -355,6 +357,12 @@ static bool qw3lm_load(Qwen3LM * m, const char * gguf_path) {
         char prefix[64];
         snprintf(prefix, sizeof(prefix), "model.layers.%d", i);
         qwen3_load_layer(&m->wctx, gf, &m->layers[i], prefix, i);
+    }
+
+    // Runtime LoRA merge into the staged weights, before the upload
+    if (adapter && !yue2_adapter_merge(&m->wctx, gf, adapter, c.n_layers, true, scale)) {
+        gf_close(&gf);
+        return false;
     }
 
     wctx_alloc(&m->wctx, m->backend);

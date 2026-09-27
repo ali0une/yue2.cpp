@@ -41,6 +41,9 @@ static void print_usage(const char * prog) {
             "  --request <json>       Input request JSON\n"
             "\n"
             "Optional:\n"
+            "  --adapters <dir>       Dir of LoRA .safetensors, picked by the request\n"
+            "  --clip-strength <f>    LoRA strength of the planner half, [0.5, 1.0]\n"
+            "  --model-strength <f>   LoRA strength of the decoder half, [1.0, 1.5]\n"
             "  --out <path>           Output audio (default: song.mp3), a batch numbers it\n"
             "  --duration <s>         Target length in seconds\n"
             "  --lm-seed <N>          Token sampling seed\n"
@@ -68,6 +71,7 @@ int main(int argc, char ** argv) {
 
     const char *       model_path  = nullptr;
     const char *       vae_path    = nullptr;
+    const char *       adapters_dir = nullptr;
     const char *       score_path  = nullptr;
     const char *       tokens_path = nullptr;
     const char *       latent_path = nullptr;
@@ -88,6 +92,12 @@ int main(int argc, char ** argv) {
             model_path = argv[++i];
         } else if (!strcmp(argv[i], "--vae") && !last) {
             vae_path = argv[++i];
+        } else if (!strcmp(argv[i], "--adapters") && !last) {
+            adapters_dir = argv[++i];
+        } else if (!strcmp(argv[i], "--clip-strength") && !last) {
+            r.adapter_clip_strength = (float) atof(argv[++i]);
+        } else if (!strcmp(argv[i], "--model-strength") && !last) {
+            r.adapter_model_strength = (float) atof(argv[++i]);
         } else if (!strcmp(argv[i], "--request") && !last) {
             i++;  // parsed before the flag pass so the flags override it
         } else if (!strcmp(argv[i], "--out") && !last) {
@@ -149,6 +159,21 @@ int main(int argc, char ** argv) {
         store_free(store);
         return 1;
     }
+    if (adapters_dir && !pipeline_load_adapters(&pipeline, adapters_dir)) {
+        store_free(store);
+        return 1;
+    }
+    if (!r.adapter.empty() && !store_find_adapter(store, r.adapter.c_str())) {
+        fprintf(stderr, "[Synth] FATAL: unknown adapter %s\n", r.adapter.c_str());
+        store_free(store);
+        return 1;
+    }
+
+    // The request picks the adapter by name and strength per half; an empty
+    // name runs the base
+    pipeline.adapter_name           = r.adapter;
+    pipeline.adapter_clip_strength  = r.adapter_clip_strength;
+    pipeline.adapter_model_strength = r.adapter_model_strength;
 
     std::vector<Yue2Song> songs;
     if (!pipeline_generate(&pipeline, r, &songs)) {

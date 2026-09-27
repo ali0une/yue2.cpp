@@ -23,6 +23,17 @@ struct Yue2Request {
     // chain of thought mode: "full", "melody" or "off"
     std::string cot;  // "full"
 
+    // runtime LoRA to merge into the backbone, by adapter name. Empty runs
+    // the base weights. The name must exist in the server's adapters dir.
+    std::string adapter;  // ""
+
+    // LoRA strength per branch of the backbone: clip scales the planner (AR)
+    // half, model scales the decoder (NAR) half. Both default to 1.0, the
+    // trained delta as is; valid ranges are clip [0.5, 1.0] and model
+    // [1.0, 1.5], see yue2_adapter_strengths_valid.
+    float adapter_clip_strength;  // 1.0
+    float adapter_model_strength; // 1.0
+
     // target length in seconds, the budget the semantic stage stops at. The
     // preset of the stage caps it, so the shorter of the two wins.
     float duration;  // 360

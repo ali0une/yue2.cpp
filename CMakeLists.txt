@@ -19,6 +19,13 @@ add_custom_target(version ALL
 # and older x86_64 toolchains need the explicit dependency.
 find_package(Threads REQUIRED)
 
+# OpenMP: the runtime LoRA merge (src/adapter-merge.h) parallelizes its delta
+# matmul with #pragma omp, guarded by _OPENMP. Without -fopenmp on the app
+# targets those pragmas are silently ignored and the merge runs single-
+# threaded (~40s per half). QUIET + guard so a build without OpenMP still
+# works, just serial.
+find_package(OpenMP QUIET)
+
 # Suppress MSVC fopen/sprintf deprecation warnings
 if(MSVC)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
@@ -79,6 +86,9 @@ macro(link_ggml_backends target)
                               -Wno-unused-parameter -Wno-unused-function -Wno-sign-conversion)
     endif()
     target_link_libraries(${target} PRIVATE ggml Threads::Threads)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(${target} PRIVATE OpenMP::OpenMP_CXX)
+    endif()
     if(TARGET ggml-base)
         target_link_libraries(${target} PRIVATE ggml-base)
     endif()
