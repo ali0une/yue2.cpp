@@ -30,3 +30,11 @@ target_include_directories(test-draw PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_executable(test-sheetsage test-sheetsage.cpp)
 target_link_libraries(test-sheetsage PRIVATE yyjson)
 link_ggml_backends(test-sheetsage)
+
+# test-adapter: runtime LoRA parse + validate harness, no backbone needed.
+add_executable(test-adapter test-adapter.cpp)
+link_ggml_backends(test-adapter)
+
+# test-adapter-merge: runtime LoRA merge parity harness against a F32 reference.
+add_executable(test-adapter-merge test-adapter-merge.cpp)
+link_ggml_backends(test-adapter-merge)
