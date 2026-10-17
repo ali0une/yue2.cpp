@@ -410,7 +410,10 @@ static bool adapter_merge_tensor(WeightCtx *                      wctx,
                                  ggml_backend_t                   backend) {
     const int64_t        ne0  = meta->ne[0];
     const int64_t        ne1  = ggml_nrows(meta);
-    const enum ggml_type type = meta->type;
+    // The staged copy keeps the load type: the file type for regular and
+    // fused loads, F32 for gf_load_tensor_f32 (pc->src is then a staging
+    // buffer, not the file mapping)
+    const enum ggml_type type = pc->tensor->type;
     const size_t         row  = ggml_row_size(type, ne0);
 
     std::vector<float> base((size_t) (ne0 * ne1));
@@ -516,6 +519,16 @@ static bool adapter_apply(WeightCtx * wctx, const GGUFModel & gf, ggml_backend_t
         }
         int64_t idx = gguf_find_tensor(gf.gguf, kv.first.c_str());
         auto    it  = staged.find(gf.mapping + gf.data_offset + gguf_get_tensor_offset(gf.gguf, idx));
+        if (it == staged.end()) {
+            // f32-converted loads (gf_load_tensor_f32) stage from a staging
+            // buffer, not the file mapping; match them by tensor name.
+            for (size_t i = 0; i < wctx->pending.size(); i++) {
+                if (std::string(wctx->pending[i].tensor->name) == kv.first) {
+                    it = staged.insert({ wctx->pending[i].src, i }).first;
+                    break;
+                }
+            }
+        }
         if (it == staged.end()) {
             fprintf(stderr, "[Adapter] FATAL: %s is not staged by this model\n", kv.first.c_str());
             return false;
