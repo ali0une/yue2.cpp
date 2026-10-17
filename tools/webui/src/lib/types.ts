@@ -13,10 +13,13 @@ export interface Yue2Sampling {
 }
 
 // one adapter of a request: an entry of the server adapter directory and its
-// strength, 1 when unset
+// strength, 1 when unset. ar_scale and nar_scale override scale on one half
+// of the backbone (the planner, the decoder) when set
 export interface Yue2Adapter {
 	name: string;
 	scale?: number | string;
+	ar_scale?: number | string;
+	nar_scale?: number | string;
 }
 
 export interface Yue2Request {

@@ -159,7 +159,9 @@ static void pipeline_free(Yue2Pipeline * p) {
 }
 
 // The adapters of a request resolved to their files, split by the half each
-// changes. A zero strength leaves the halves as they are.
+// changes. A zero strength leaves the halves as they are; ar_scale and
+// nar_scale override scale on one half, so an adapter trained on both can be
+// pushed harder on the decoder than the planner (or vice versa).
 static bool pipeline_adapters(const Yue2Pipeline *      p,
                               const Yue2Request &       r,
                               std::vector<AdapterUse> * ar,
@@ -170,14 +172,13 @@ static bool pipeline_adapters(const Yue2Pipeline *      p,
             fprintf(stderr, "[Pipeline] FATAL: adapter %s not found\n", a.name.c_str());
             return false;
         }
-        if (a.scale == 0.0f) {
-            continue;
+        float ar_scale  = a.ar_scale != 0.0f ? a.ar_scale : a.scale;
+        float nar_scale = a.nar_scale != 0.0f ? a.nar_scale : a.scale;
+        if (e->halves & ADAPTER_AR && ar_scale != 0.0f) {
+            ar->push_back({ e->path, ar_scale });
         }
-        if (e->halves & ADAPTER_AR) {
-            ar->push_back({ e->path, a.scale });
-        }
-        if (e->halves & ADAPTER_NAR) {
-            nar->push_back({ e->path, a.scale });
+        if (e->halves & ADAPTER_NAR && nar_scale != 0.0f) {
+            nar->push_back({ e->path, nar_scale });
         }
     }
     return true;

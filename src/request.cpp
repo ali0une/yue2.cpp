@@ -179,11 +179,17 @@ static void request_parse_obj(yyjson_val * obj, Yue2Request * r) {
         size_t       i, n;
         yyjson_val * item;
         yyjson_arr_foreach(v, i, n, item) {
-            yyjson_val * name  = yyjson_obj_get(item, "name");
-            yyjson_val * scale = yyjson_obj_get(item, "scale");
+            yyjson_val * name     = yyjson_obj_get(item, "name");
+            yyjson_val * scale    = yyjson_obj_get(item, "scale");
+            yyjson_val * ar_scale = yyjson_obj_get(item, "ar_scale");
+            yyjson_val * nar_scale = yyjson_obj_get(item, "nar_scale");
             if (name && yyjson_is_str(name)) {
-                r->adapters.push_back(
-                    { yy_str(name), scale && yyjson_is_num(scale) ? (float) yyjson_get_num(scale) : 1.0f });
+                Yue2Adapter a;
+                a.name      = yy_str(name);
+                a.scale     = scale && yyjson_is_num(scale) ? (float) yyjson_get_num(scale) : 1.0f;
+                a.ar_scale  = ar_scale && yyjson_is_num(ar_scale) ? (float) yyjson_get_num(ar_scale) : 0.0f;
+                a.nar_scale = nar_scale && yyjson_is_num(nar_scale) ? (float) yyjson_get_num(nar_scale) : 0.0f;
+                r->adapters.push_back(a);
             }
         }
     }
@@ -296,6 +302,12 @@ std::string request_to_json(const Yue2Request * r, bool sparse) {
             yyjson_mut_val * item = yyjson_mut_arr_add_obj(doc, list);
             yyjson_mut_obj_add_strncpy(doc, item, "name", a.name.c_str(), a.name.size());
             yyjson_mut_obj_add_real(doc, item, "scale", a.scale);
+            if (a.ar_scale != 0.0f) {
+                yyjson_mut_obj_add_real(doc, item, "ar_scale", a.ar_scale);
+            }
+            if (a.nar_scale != 0.0f) {
+                yyjson_mut_obj_add_real(doc, item, "nar_scale", a.nar_scale);
+            }
         }
         yyjson_mut_obj_add_val(doc, root, "adapters", list);
     }

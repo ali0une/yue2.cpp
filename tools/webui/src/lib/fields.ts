@@ -114,7 +114,14 @@ export function buildSparse(r: Yue2Request): Yue2Request {
 	}
 	const adapters = (r.adapters || [])
 		.filter((a) => a.name)
-		.map((a) => ({ name: a.name, scale: num(a.scale) ?? 1 }));
+		.map((a) => {
+			const out: Yue2Adapter = { name: a.name, scale: num(a.scale) ?? 1 };
+			const ar = num(a.ar_scale);
+			if (ar !== undefined && ar !== 0) out.ar_scale = ar;
+			const nar = num(a.nar_scale);
+			if (nar !== undefined && nar !== 0) out.nar_scale = nar;
+			return out;
+		});
 	if (adapters.length) out.adapters = adapters;
 	for (const s of SAMPLING_FIELDS) {
 		const preset = resolveSampling(get(r, s.key));

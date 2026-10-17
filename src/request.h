@@ -11,10 +11,15 @@
 #include <string>
 #include <vector>
 
-// One adapter of a request: an entry of the --adapters directory and its strength
+// One adapter of a request: an entry of the --adapters directory and its
+// strength. ar_scale and nar_scale override scale on one half of the backbone
+// (the planner, the decoder): 0 keeps scale, so a file trained on both halves
+// can be pushed harder on one than the other.
 struct Yue2Adapter {
     std::string name;
-    float       scale;  // 1.0
+    float       scale;     // 1.0
+    float       ar_scale;  // 0 = scale
+    float       nar_scale; // 0 = scale
 };
 
 struct Yue2Request {
@@ -78,7 +83,7 @@ struct Yue2Request {
     int mp3_bitrate;  // 128
 
     // adapters stacked on the backbone, each merged into the halves it
-    // changes at its own strength
+    // changes at its own strength, optionally overridden per half
     std::vector<Yue2Adapter> adapters;  // empty
 
     // continuation: the semantic stream of a source song, its section

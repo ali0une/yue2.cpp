@@ -396,7 +396,10 @@ hears it and the rest grows from it.
 --adapters <dir>      every .safetensors file, every folder holding one
   scan                keys normalized to the GGUF names, halves recorded, a key outside
                       the backbone skips the adapter with the tensor at fault
-request adapters      [{name, scale}], each split onto the halves it changes
+request adapters      [{name, scale, ar_scale, nar_scale}], each split onto the
+                      halves it changes; ar_scale and nar_scale override scale on
+                      one half (0 keeps scale), so an adapter trained on both can be
+                      pushed harder on the decoder than the planner or vice versa
   AR load             merged into self_attn.{q,k,v,o}_proj and mlp.{gate,up,down}_proj
   NAR load            merged into nar_self_attn, nar_mlp, vae2llm and llm2vae
 ```

@@ -398,7 +398,21 @@
 								class="scale-input"
 								placeholder="1.0"
 								bind:value={app.request.adapters[i].scale}
-								title="Adapter strength. Lower it if you hear artifacts, raise it for a stronger effect."
+								title="Adapter strength on both halves it changes. Lower it if you hear artifacts, raise it for a stronger effect."
+							/>
+							<input
+								type="text"
+								class="half-input"
+								placeholder="AR"
+								bind:value={app.request.adapters[i].ar_scale}
+								title="Override the strength on the AR half (the score and the codes). Empty keeps the strength above."
+							/>
+							<input
+								type="text"
+								class="half-input"
+								placeholder="NAR"
+								bind:value={app.request.adapters[i].nar_scale}
+								title="Override the strength on the NAR half (the acoustics). Empty keeps the strength above."
 							/>
 						{/if}
 					</div>
@@ -873,6 +887,10 @@
 	}
 	.scale-input {
 		width: 4rem;
+		flex-shrink: 0;
+	}
+	.half-input {
+		width: 3.5rem;
 		flex-shrink: 0;
 	}
 
